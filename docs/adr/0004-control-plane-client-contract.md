@@ -6,46 +6,26 @@
 
 ## Context
 
-A future **izolater server** orchestrates fleets. This repo implements **client hooks/contracts only**. Owner additions:
-
-- While isolated, **only** CP services (HTTP/RPC) remain reachable (plus local reverse/break-glass).  
-- CP should eventually **reset** the reverse quarantine password or **remove** the password requirement.
+Future izolater server orchestrates fleets. Client needs a transport that is **secure** and **flexible** for SaaS, on-prem, and varied orchestration later.
 
 ## Decision
 
-1. Keep versioned contracts under `contracts/` (Markdown now; schema later).  
-2. **Command set** (indicative):
-
-   | Command | Purpose |
-   | --- | --- |
-   | `Isolate` | Apply profile; ensure CP allowlist path |
-   | `Reverse` | Restore; `ReverseProof` may be CP capability |
-   | `Status` | State, mode, tenant_id, versions |
-   | `ResetReversePassword` | Set new verifier **without** old password (CP-auth only) |
-   | `SetAuthMode` | e.g. `password_required` → `password_disabled` / `password_optional` |
-   | `RotateBreakGlassTrust` | Update tenant public key / CA material |
-   | `ApplyProfile` | Swap isolation profile |
-
-3. **Transport assumption:** mutually authenticated channel (mTLS or equivalent); client dial-out preferred for NAT; trust anchors in install config.  
-4. **Isolation allowlist:** CP endpoints from install/runtime config are the **only** intentional remote exception in the hard profile (ADR-0001).  
-5. **Local CLI** remains usable offline; CP may be dormant.  
-6. **No server implementation** in this repository.
+1. **Primary transport: HTTPS (HTTP/2) + mutual TLS.** Versioned command payloads (JSON first; protobuf-over-HTTPS optional). Client **dials out** to CP.  
+2. **Contracts are transport-agnostic** under `contracts/` so a **gRPC binding can be added later** without changing Isolate/Reverse semantics.  
+3. **Why not custom raw RPC as primary:** higher chance of weak auth/framing; poorer fit for load balancers, API gateways, mesh, and enterprise inspection.  
+4. **Why HTTPS before gRPC-only:** broadest deployment surface; same mTLS security bar; easiest multi-environment orchestration. gRPC remains a fine *later* option for streaming/high-chatter agents.  
+5. **Command set** (indicative): `Isolate`, `Reverse`, `Status`, `ResetReversePassword`, `SetAuthMode`, `RotateBreakGlassTrust`, `ApplyProfile`.  
+6. While isolated, **only** configured CP endpoints remain the intentional remote allowlist (ADR-0001).  
+7. **No server implementation** in this repo.
 
 ## Consequences
 
-- Client auth module must treat CP as a first-class `ReverseProof` and config authority for password/mode.  
-- Resetting password or disabling password requirement via CP is a **high-impact** control — must be tightly authenticated and audited.  
-- Hard isolation without reachable CP still needs local password and/or sister break-glass (ADR-0008).
-
-## Alternatives considered
-
-| Alternative | Why not |
-| --- | --- |
-| Ignore CP until server exists | Would force breaking redesign of allowlist + auth modes |
-| CP always required for reverse | Breaks air-gapped / CP-outage IR |
+- Client TLS stack and trust-anchor story become P1-critical.  
+- Orchestrators can use ordinary HTTPS tooling.  
+- Password reset / mode change over CP remain high-impact, mTLS-gated, heavily audited.
 
 ## Open questions
 
-- HTTP vs custom RPC vs both for v1 CP protocol (owner said “probably via http or rpc”).  
-- Can CP reverse with capability **alone** when mode is `password_required`? (**Suggested: yes**, CP proof satisfies the gate; password not also required.)  
-- Authorization model for `SetAuthMode` (which CP roles)?
+- Exact URL layout / API versioning (`/v1/...`).  
+- CP role model for `SetAuthMode` / password reset.  
+- Confirm owner accept of HTTPS+mTLS primary (recommended in plan).

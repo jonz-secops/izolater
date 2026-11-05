@@ -3,79 +3,56 @@
 - Status: Proposed (revised; **not accepted**)
 - Date: 2026-11-05
 - Deciders: skrappy0x4a (pending acceptance)
-- Supersedes prior draft scope: “firewall-only”
 
 ## Context
 
-izolater must **quickly isolate an endpoint** in a way that is **reversible** and implementable from a Zig binary across Windows, macOS, and Linux. Owner direction expands isolation beyond packet filters alone:
-
-- Network filtering  
-- Routes  
-- DNS  
-- Shut down **non–internet-connected** interfaces  
-- **Disconnect Wi‑Fi**  
-- **Sole exception:** reachability to the future **control-plane** service (HTTP and/or RPC)
-
-Process/disk lockdown remain out of scope for now.
+Hard containment on hostile endpoints: cut remote control paths while remaining reversible. Owner refinements: **kill existing TCP sessions**, **clear DNS/ARP-related caches**, optional **Bluetooth / cellular** disable via feature flags, **never disable USB**.
 
 ## Decision
 
-1. **Isolation profile (default hard profile)** applies a coordinated multi-step containment plan, all reversible via snapshot:
+1. **Default hard profile** (all reversible via snapshot):
 
    | Step | Intent |
    | --- | --- |
-   | A. Snapshot | Capture firewall/pf/nft rules, routes, DNS config, interface admin state, Wi‑Fi association metadata needed to restore |
-   | B. DNS | Pin/override resolver behavior so name resolution cannot bypass policy (block or redirect per profile; CP hostnames resolvable if allowlisted) |
-   | C. Routes | Remove/replace routes that enable general egress; retain only path(s) required for CP allowlist (if configured) |
-   | D. Packet filter | Deny most ingress/egress; allow CP endpoints (and minimal supporting traffic if proven necessary, e.g. ARP/NDP on the CP path) |
-   | E. Wi‑Fi | Disconnect / disable Wi‑Fi radios or profiles used for general connectivity |
-   | F. Other NICs | Administratively disable interfaces that are **not** on the path to the CP / not providing the retained uplink |
+   | A. Snapshot | Filters, routes, DNS, interface/Wi‑Fi/BT/cellular admin state as applicable |
+   | B. DNS policy | Override/block resolvers except what CP allowlist needs |
+   | C. Routes | Remove general egress; keep CP path if configured |
+   | D. Packet filter | Deny most traffic; allow CP endpoints only (when configured) |
+   | E. **Kill non-CP TCP** | Actively terminate established TCP sessions that are not on the CP allowlist |
+   | F. **Flush caches** | Clear DNS resolver caches and ARP/neighbor caches (and OS equivalents) so stale resolutions/L2 entries cannot bridge policy |
+   | G. Wi‑Fi | Disconnect / disable Wi‑Fi used for general connectivity |
+   | H. Other NICs | Disable interfaces not on the retained CP/uplink path |
+   | I. Bluetooth | **If feature flag enabled** (tenant default or install override): disable BT radios / PAN |
+   | J. Cellular / WWAN (“smart call”) | **If feature flag enabled**: disable cellular/WWAN interfaces |
+   | K. USB | **Do not disable** USB as part of isolation |
 
-2. **CP exception:** when CP endpoints are configured, isolation **must leave** a minimal path (filter + route + DNS) so HTTP/RPC to those endpoints can work. When CP is not configured, fail closed on general network (local reverse / break-glass still apply).  
+2. **Feature flags** (tenant default, overridable per install): `disable_bluetooth`, `disable_cellular` (names indicative). Default for hostile templates: recommend `true` once backends are reliable; until then document cautiously.  
 
-3. **Architecture:** isolation orchestrator + platform backend interface: `probe`, `snapshot`, `apply(profile)`, `restore(snapshot)`, `status`. Backends implement OS-specific operations for filters, routes, DNS, interface, and Wi‑Fi.  
+3. **CP exception:** minimal path for CP (HTTPS/mTLS — ADR-0004). No CP configured ⇒ no general remote path.  
 
-4. **Default backends (intent):**  
-   - **Windows:** Firewall/WFP + route table + DNS client settings + interface/`netsh`/appropriate APIs + WLAN disconnect.  
-   - **macOS:** pf anchors + routes + DNS (scutil/resolver config as appropriate) + interface/Wi‑Fi control.  
-   - **Linux:** nftables + routes + resolvers (resolvectl/NetworkManager as detected) + ip link / nmcli Wi‑Fi.  
+4. **Orchestrator + platform backends** (`probe` / `snapshot` / `apply` / `restore` / `status`) on Windows → macOS → Linux.  
 
-5. **Profiles** encode the steps above as data; OS backends translate.  
+5. **Bypasses** inventoried (WSL, VPN, Hyper-V, IPv6, tether, etc.) — mitigate, document, or defer explicitly.  
 
-6. **Bypasses** (WSL, Hyper-V, containers, VPNs, IPv6, tether, Thunderbolt bridges, etc.) are inventoried per OS and mitigated, documented, or explicitly deferred — never ignored.
-
-7. **Reversibility:** every mutate step is covered by the snapshot; partial failure rolls back (ADR-0006).
+6. **Success metric:** remote controller loses the channel (sockets die / unroutable), not merely “a rule exists.”
 
 ## Consequences
 
-- Much stronger IR containment story; also **higher restore complexity** and more privilege surface.  
-- Wi‑Fi disconnect + NIC disable can strand a host if CP path and local reverse are both wrong — break-glass (ADR-0008) is mandatory product thinking.  
-- “Internet vs non-internet interface” classification needs a clear probe heuristic (default route membership, operstate, medium type) — must be validated on real hardware.  
-- Spikes required on **Windows first**, then macOS, then Linux (ADR-0007).
+- Stronger C2 interruption; more complex restore (session state is not “restored,” only network posture is).  
+- Cache flush reduces stealthy reuse of poisoned DNS/ARP after policy apply.  
+- USB left up preserves local IR media / break-glass USB workflows.  
+- BT/cellular flags avoid surprising tenants that rely on those radios for out-of-band IR (they must opt policy consciously).
 
 ## Alternatives considered
 
 | Alternative | Why not |
 | --- | --- |
-| Firewall-only | Owner rejected as insufficient from day one |
-| Pull cable / disable *all* NICs | Breaks CP exception and often local IR |
-| Kernel driver quarantine | Too heavy for v1 |
-
-## Hostile-environment note
-
-Assume active **socket C2 / RAT** and malware that will race the apply window. Isolation must make general remote sockets unroutable as early as practical; optional **session kill/drain** for non-CP connections is an open owner decision. Success is measured by “remote controller loses the channel,” not by “a rule was inserted.”
-
-## Suggestions
-
-1. Treat “CP path” as a first-class object: `{endpoints[], transport: http|rpc, dns_names[]}`.  
-2. Prefer **disable Wi‑Fi** over deleting profiles so restore is clean.  
-3. Record **before/after** interface inventory in audit for forensics.  
-4. Add a dry-run / `isolate --plan` that prints the intended mutations without applying.  
-5. Order mutations to cut egress early (e.g. routes/filter before slower Wi‑Fi/NIC steps) to shrink the C2 race window.
+| Filter-only, leave TCP up | Owner rejected; RAT sessions can linger |
+| Disable USB | Owner rejected; breaks local IR/break-glass media |
+| Always kill BT/cellular with no flag | Too blunt; owner wants per-tenant/install control |
 
 ## Open questions
 
-- Exact heuristic for “non–internet-connected interface” (see clarifying questions in the plan).  
-- Is Bluetooth PAN / USB tether in scope for disable?  
-- Minimum traffic allowed to reach CP (DNS to public resolvers vs only static CP IPs)?  
-- Windows API preference once spikes run (WFP vs Firewall Policy COM, etc.).
+- Exact OS APIs for TCP kill and ARP/DNS flush per platform (spike).  
+- Whether UDP “sessions” / QUIC need explicit handling beyond filter+route.  
+- Default flag values for `disable_bluetooth` / `disable_cellular` in hostile template.

@@ -10,7 +10,7 @@ Hostile hosts and multi-proof reverse require durable identity (`tenant_id`), au
 
 ## Decision
 
-1. **Install config (relatively static):** schema version, `install_id`, `tenant_id`, auth mode, password verifier (if any), Argon2 params, break-glass public trust (tenant pubkey/CA), CP endpoints + trust anchors, default profile, feature flags, ACL expectations, install-scoped integrity key material (not the user password).  
+1. **Install config (relatively static):** schema version, `enrollment` (`standalone`|`tenant`), `install_id`, optional `tenant_id` + `tenant_name`, `break_glass_scope`, auth mode, password verifier (if any), Argon2 params, break-glass public trust, CP endpoints + trust anchors, default profile, feature flags (`disable_bluetooth`, `disable_cellular`, …), ACL expectations, install-scoped integrity key material (not the user password). See [tenancy.md](../tenancy.md).  
 2. **Runtime state (dynamic):** isolation enum, active profile, snapshot reference, timestamps, reboot-reapply flag, throttle counters (opaque).  
 3. **Ephemeral never persisted:** passwords, one-shot CLI secrets, break-glass private keys (those belong in sister tooling / vault—not on the endpoint).  
 4. **Install** mandatory before isolate; restrictive ACLs (admin/SYSTEM or root-only) — assume malware will *try* to read these files.  

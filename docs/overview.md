@@ -2,9 +2,9 @@
 
 ## What izolater is
 
-**izolater** is a small, multiplatform **client binary** (Zig, latest stable) that can **quickly contain a hostile endpoint**, then **reverse** that containment only when a valid **`ReverseProof`** is presented: reverse quarantine password, **tenant-scoped break-glass** proof, and/or a future **control-plane** capability.
+**izolater** is a small, multiplatform **client binary** (Zig, latest stable) that can **quickly contain a hostile endpoint**, then **reverse** under policy: reverse password and/or break-glass and/or CP proof; when password mode is **off**, **local admin alone** may reverse.
 
-Containment is broader than “a firewall rule”: **packet filters, routes, DNS, Wi‑Fi disconnect, and disabling interfaces** that are not needed for the sole remote exception—the future **control-plane** service (HTTP and/or RPC).
+Containment: **filters, routes, DNS, TCP session kill, DNS/ARP cache flush, Wi‑Fi down, non-CP NICs down**; optional flagged **Bluetooth / cellular** disable; **USB left alone**. Remote exception: CP over **HTTPS + mTLS** (planned). Tenancy: [tenancy.md](tenancy.md).
 
 ## Hostile environment
 

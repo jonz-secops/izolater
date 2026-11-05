@@ -5,23 +5,23 @@
 
 ## 1. High-level overview
 
-**izolater** is a multiplatform **Zig** client that **quickly contains a hostile endpoint** and **reverses** containment only with a valid **cryptographic proof** (reverse password, tenant break-glass, and/or future control-plane capability).
+**izolater** is a multiplatform **Zig** client that **quickly contains a hostile endpoint** and reverses containment under a clear auth policy: reverse password when required, tenant/install **break-glass**, future **CP**, or **local admin alone** when password mode is off.
 
-**Hostile by default:** design for malware, socket-based remote control (RAT/C2), and rogue/compromised automation (including tool-using AI agents)—not lab-clean hosts.
+**Hostile by default:** malware, socket C2/RAT, rogue/compromised automation (incl. AI agents).
 
-**Containment (from day one):** packet filters, routes, DNS, disconnect Wi‑Fi, disable non-uplink / non–CP-path interfaces. **Sole intentional remote exception:** future control-plane services (HTTP and/or RPC).
+**Hard isolate:** packet filters, routes, DNS, clear DNS/ARP-related caches, **kill existing non-CP TCP sessions**, disconnect Wi‑Fi, disable non–CP-path NICs. Optional (feature-flagged per tenant or install): disable **Bluetooth** and **cellular/WWAN (“smart call”)** radios. **Do not disable USB.** Sole intentional remote exception: control-plane over **HTTPS + mTLS** (see recommendation below).
 
-**Recovery:** password modes (required / optional / disabled); tenant-scoped **sister break-glass** binary/tooling (max blast radius = tenant); future CP can reset password or remove password requirement. **izolater server** remains a separate project.
+**Recovery:** auth modes; sister break-glass scoped per rules in [tenancy.md](tenancy.md); CP can reset/remove password requirement. Server is a separate project.
 
-Deeper: [overview.md](overview.md) · [architecture.md](architecture.md) · [threat-model.md](threat-model.md)
+Deeper: [overview.md](overview.md) · [architecture.md](architecture.md) · [threat-model.md](threat-model.md) · [tenancy.md](tenancy.md)
 
 ## 2. Required features (summary)
 
 | Priority | Themes |
 | --- | --- |
-| **P0** | Install + tenant_id + auth mode · password verifier when required · full hard-isolate plan · snapshot/restore · ReverseProof gate · audit · Windows · hostile-aware CLI (no open reverse socket) |
-| **P1** | macOS then Linux backends · CP allowlist path · break-glass sister tooling · reboot persistence / re-apply · tamper detection · CP stubs (`ResetReversePassword`, `SetAuthMode`) · connection drain/kill policy |
-| **P2** | Watchdog vs drift · TPM · signed policies · per-install certs · dual-control break-glass |
+| **P0** | Install (standalone or tenant) · auth modes · hard isolate + TCP kill + DNS/ARP cache clear · snapshot/restore · ReverseProof / admin-if-password-off · audit · Windows · no open reverse socket |
+| **P1** | macOS→Linux · CP HTTPS/mTLS stubs · break-glass sister (tenant / tenant+host / install) · BT/cellular feature flags · reboot persistence · tamper detection |
+| **P2** | Optional drift watchdog · TPM · dual-control · signed policies |
 
 Full list: [features.md](features.md)
 
@@ -29,65 +29,84 @@ Full list: [features.md](features.md)
 
 | ADR | Topic |
 | --- | --- |
-| [0001](adr/0001-platform-isolation-mechanisms.md) | Hard isolate: filter + routes + DNS + Wi‑Fi + NIC; CP exception |
-| [0002](adr/0002-crypto-password-handling.md) | Argon2id; stdin/file ≻ env; capped reverse throttle |
-| [0003](adr/0003-install-vs-runtime-config.md) | Install vs runtime; tenant + auth mode fields |
-| [0004](adr/0004-control-plane-client-contract.md) | CP commands including password reset / mode change |
-| [0005](adr/0005-threat-model-assumptions.md) | Hostile host, malware, sockets, rogue AI |
+| [0001](adr/0001-platform-isolation-mechanisms.md) | Hard isolate + TCP kill + cache flush; BT/cellular flags; USB untouched |
+| [0002](adr/0002-crypto-password-handling.md) | Argon2id; stdin/file/CP; capped throttle |
+| [0003](adr/0003-install-vs-runtime-config.md) | Install vs runtime; tenancy fields |
+| [0004](adr/0004-control-plane-client-contract.md) | CP over HTTPS+mTLS; password reset / mode change |
+| [0005](adr/0005-threat-model-assumptions.md) | Hostile assumptions |
 | [0006](adr/0006-reversibility-model.md) | Rich snapshot; proof-gated reverse |
-| [0007](adr/0007-multiplatform-strategy.md) | Windows → **macOS** → Linux |
-| [0008](adr/0008-break-glass-and-auth-modes.md) | Sister binary; tenant blast radius; auth modes |
+| [0007](adr/0007-multiplatform-strategy.md) | Windows → macOS → Linux |
+| [0008](adr/0008-break-glass-and-auth-modes.md) | Sister scopes + admin-alone when password off |
 
 ## 4. Repo layout
 
-Scaffolds under `docs/`, `contracts/`, `src/*` (incl. break-glass), `tests/*` — [directory-structure.md](directory-structure.md). No product Zig yet.
+See [directory-structure.md](directory-structure.md). Tenancy examples: [tenancy.md](tenancy.md), [`config/tenants.example.toml`](../config/tenants.example.toml).
 
 ## 5. Security validation
 
-- [threat-model.md](threat-model.md) · [validation.md](validation.md)  
-- Prove before code: adversarial reverse attempts, snapshot tamper, C2-path cut, tenant mismatch on break-glass, bypass inventory (WSL/VPN/IPv6/…)  
-- ADRs remain **Proposed** until you accept them
+[threat-model.md](threat-model.md) · [validation.md](validation.md) — ADRs remain Proposed.
 
 ## 6. Non-goals
 
-izolater **server** implementation, EDR replacement, guaranteed enforcement vs SYSTEM/root malware rewriting the stack outside izolater, global vendor unlock, mobile/IoT. Details: [non-goals.md](non-goals.md).
+[non-goals.md](non-goals.md) — no server impl; no USB disable; no global unlock.
 
 ## Owner decisions captured
 
 | Topic | Decision |
 | --- | --- |
 | OS order | Windows → macOS → Linux |
-| Isolation scope | Network + routes + DNS + Wi‑Fi down + non-CP NICs down; CP HTTP/RPC exception |
-| Break-glass | Tenant-scoped sister binary / key-cert design; max blast radius = tenant |
-| Password requirement | Option: required / not required (modes) |
-| Password injection | Safest channels that still allow scripts + future CP (stdin/file/CP; env off by default) |
-| Wrong password | Acceptable IR tradeoff: progressive delay, no permanent brick |
-| Future CP | Can reset reverse password or remove password requirement |
-| ADR accept | **Not accepting 0001–0007 yet** (0008 also Proposed) |
-| Environment | Prepare for hostile: malware, rogue AI, socket remote control |
+| Isolation | Filters + routes + DNS + Wi‑Fi + non-CP NICs; **kill non-CP TCP**; **clear DNS/ARP-related caches**; CP path exception |
+| Bluetooth / cellular | **Disable allowed**, but **feature flag** per tenant or per install |
+| USB | **Do not disable** |
+| Password off | **Local admin alone may reverse** |
+| Break-glass scopes | Tenant install: **per-tenant** *or* **per-tenant + per-host**; non-tenant: **per-install sister** |
+| Tenancy pattern | UUID `tenant_id` + slug `tenant_name`; fictitious samples in [tenancy.md](tenancy.md) |
+| Password injection | stdin/file/CP; env off by default |
+| Wrong password | Progressive delay, no permanent brick |
+| Future CP | Reset password or remove password requirement |
+| ADR accept | Still **not** accepting ADRs |
+| Hostile env | Malware, rogue AI, socket remote control |
 
-## Clarifying questions (need your input)
+## Recommendations (where you were unsure)
 
-1. **Break-glass composition:** password **OR** sister proof (recommended for lost-password), or **AND**?  
-2. When mode is `password_optional` / `password_disabled`, can **local admin alone** reverse, or still require sister/CP? (Hostile posture strongly favors still requiring a proof.)  
-3. Sister artifact default: **per-tenant** (recommended) vs **per-install** required for GA?  
-4. Must break-glass work **fully offline** (USB on isolated host), CP-only, or both? (Recommend both.)  
-5. Isolate should **kill/drain existing non-CP TCP sessions**, or only change filter/routes/DNS/interfaces?  
-6. **Watchdog service** that re-applies quarantine if malware flips Wi‑Fi/NIC back on — in scope for v1 or P1?  
-7. Pre-server `tenant_id`: operator-supplied UUID at install OK?  
-8. CP protocol preference to design toward: **HTTPS**, custom **RPC**, or both?  
-9. Bluetooth PAN / USB tether: treat like Wi‑Fi (disable) in hard profile?
+### Break-glass OR vs AND
 
-## Suggestions (improvements)
+**Recommend default: OR** (password **or** break-glass **or** CP proof).  
+Reason: AND fails the whole point of lost-password recovery—if the password is gone, AND cannot unisolate. Offer optional `break_glass_requires_password = true` later for dual-control high-assurance tenants. **Pending your explicit accept.**
 
-1. Challenge–response break-glass so tenant private keys never sit on the endpoint.  
-2. Short-lived, single-use signed proofs; optional HSM/YubiKey for sister tooling.  
-3. No unauthenticated localhost reverse daemon — rogue agents love those.  
-4. `isolate --plan` dry-run before mutate.  
-5. Independent install MAC key (not derived only from user password) so CP password clear doesn’t break snapshot integrity.  
-6. Loud, distinct audit events for break-glass and CP mode/password changes.  
-7. Default new installs to `password_required` in any “hostile” template.
+### Drift watchdog (what it is)
+
+After isolate, malware with admin rights can flip Wi‑Fi/NIC back on *outside* izolater. A **drift watchdog** would be a privileged helper that notices “we’re supposed to be isolated but Wi‑Fi is up again” and **re-applies** quarantine / alerts.  
+**Recommend:** not required for first useful release; schedule as **P2** (or late P1) once hard isolate + restore are solid. It improves hostile resilience but adds a service surface we must keep reverse-API-free.
+
+### CP: HTTP vs RPC
+
+**Recommend: HTTPS (HTTP/2) + mTLS as the primary control channel**, with versioned JSON (or protobuf-in-HTTPS) command payloads.  
+
+| Option | Security | Flexibility later |
+| --- | --- | --- |
+| **HTTPS + mTLS** (recommended) | Mature PKI, load balancers, WAF, standard auditing | Best fit for SaaS, on-prem, gateways, mesh; easy to add async jobs |
+| gRPC (HTTP/2) + mTLS | Equally strong if mTLS done right | Great streaming; harder for some enterprise proxies; can be a **later binding** of the same contracts |
+| Custom raw RPC | Easy to get auth/framing wrong | Locks orchestration options |
+
+Design `contracts/` **transport-agnostic** so a gRPC binding can appear later without changing Isolate/Reverse semantics. Prefer **client dial-out** to the CP.
+
+## Remaining open questions
+
+1. Accept **OR** as default break-glass composition (recommendation above)?  
+2. Accept **drift watchdog = P2**?  
+3. Accept **HTTPS + mTLS** as primary CP transport (gRPC optional later)?  
+4. Offline break-glass required for GA (USB sister on isolated host) — still recommended **yes**; confirm?  
+5. Minimum OS versions per platform?
+
+## Suggestions
+
+1. Challenge–response break-glass; keys in vault/HSM.  
+2. `isolate --plan` dry-run.  
+3. Order apply to cut egress before slower radio steps; then kill TCP; then flush DNS/ARP caches.  
+4. Feature flags: `disable_bluetooth`, `disable_cellular` at tenant default with install override.  
+5. Never authorize on `tenant_name` alone.
 
 ## Doc map
 
-[docs/README.md](README.md) · [contracts/](../contracts/)
+[docs/README.md](README.md) · [contracts/](../contracts/) · [tenancy.md](tenancy.md)

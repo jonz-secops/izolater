@@ -7,6 +7,7 @@ Planning docs for the **izolater client** — multiplatform Zig containment bina
 | [izolater-plan.md](izolater-plan.md) | Concise user-facing plan |
 | [overview.md](overview.md) | Product & technical overview |
 | [features.md](features.md) | Prioritized features |
+| [tenancy.md](tenancy.md) | tenant_id pattern + fictitious samples |
 | [architecture.md](architecture.md) | Client architecture sketch |
 | [threat-model.md](threat-model.md) | Hostile threat model |
 | [validation.md](validation.md) | Prove-before-code gates |

@@ -14,9 +14,10 @@ izolater/
 │   ├── validation.md
 │   ├── non-goals.md
 │   ├── directory-structure.md
+│   ├── tenancy.md             # tenant_id pattern + samples
 │   └── adr/                   # ADR-0001 … 0008
-├── contracts/                 # client↔CP assumptions
-├── config/                    # example non-secret samples
+├── contracts/                 # client↔CP assumptions (HTTPS+mTLS)
+├── config/                    # tenants.example.toml, samples
 ├── scripts/
 ├── src/
 │   ├── cli/

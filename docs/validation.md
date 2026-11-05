@@ -23,7 +23,9 @@ Gates before Zig product implementation. ADRs remain Proposed until owner accept
 | S6 | Fail matrix | No silent success |
 | S7 | Adversarial reverse | Wrong password / no proof / rogue script → no change |
 | S8 | Tenant break-glass mismatch | Cross-tenant proof refused |
-| S9 | C2 path cut | Test socket to public IP fails after isolate (CP still works if configured) |
+| S9 | C2 path cut | Pre-existing TCP to public IP dies; new egress fails; DNS/ARP caches flushed |
+| S11 | USB untouched | Isolate must not disable USB |
+| S12 | Tenancy binding | Cross-tenant and wrong install_id (tenant_and_host) proofs fail |
 | S10 | Throttle IR tradeoff | Caps delay; break-glass still usable |
 
 ## Platform spikes (pre-product)

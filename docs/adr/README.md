@@ -6,14 +6,14 @@ ADRs capture significant durable choices. **None are accepted yet** — all rema
 
 | ADR | Title | Status |
 | --- | --- | --- |
-| [0001](0001-platform-isolation-mechanisms.md) | Platform isolation mechanisms | Proposed (revised) |
+| [0001](0001-platform-isolation-mechanisms.md) | Platform isolation (TCP kill, caches, BT/cellular flags) | Proposed (revised) |
 | [0002](0002-crypto-password-handling.md) | Crypto and password handling | Proposed (revised) |
 | [0003](0003-install-vs-runtime-config.md) | Install vs runtime configuration | Proposed (revised) |
-| [0004](0004-control-plane-client-contract.md) | Control-plane client contract | Proposed (revised) |
+| [0004](0004-control-plane-client-contract.md) | CP contract (HTTPS+mTLS primary) | Proposed (revised) |
 | [0005](0005-threat-model-assumptions.md) | Threat model assumptions (hostile) | Proposed (revised) |
 | [0006](0006-reversibility-model.md) | Reversibility model | Proposed (revised) |
 | [0007](0007-multiplatform-strategy.md) | Multiplatform strategy | Proposed (revised) |
-| [0008](0008-break-glass-and-auth-modes.md) | Break-glass sister binary & auth modes | Proposed |
+| [0008](0008-break-glass-and-auth-modes.md) | Break-glass scopes & auth modes | Proposed (revised) |
 
 ## Template
 

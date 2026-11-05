@@ -96,10 +96,13 @@ Against **A3**, izolater cannot guarantee the OS network stack stays quarantined
 | R6 | Race: C2 exfils during the isolate apply window |
 | R7 | Rogue AI with break-glass key file access |
 
-## Clarifying questions (hostile + prior)
+## Resolved (owner)
 
-See also the user-facing [izolater-plan.md](izolater-plan.md).
+- Kill established non-CP **TCP** sessions on isolate.  
+- Clear **DNS/ARP-related caches**.  
+- Password off ⇒ **admin alone** may reverse.  
+- BT/cellular disable = **feature-flagged**; **USB not disabled**.  
 
-1. Should isolate **actively terminate** established non-CP connections, or only block new packets/routes?  
-2. Persist a **privileged service** that re-applies quarantine if malware undoes rules (best-effort watchdog)?  
-3. Any requirement to detect/report **drift** (Wi‑Fi back on, NIC re-enabled) to CP/local audit?
+## Still open / recommended
+
+See [izolater-plan.md](izolater-plan.md): break-glass OR default, drift watchdog as P2, HTTPS+mTLS primary CP, offline sister for GA.
