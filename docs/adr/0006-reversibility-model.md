@@ -1,39 +1,39 @@
 # ADR-0006: Reversibility model
 
-- Status: Proposed
+- Status: Proposed (revised; **not accepted**)
 - Date: 2026-11-05
 - Deciders: skrappy0x4a (pending acceptance)
+- Related: ADR-0001 (expanded isolation steps), ADR-0008 (proofs)
 
 ## Context
 
-Isolation that cannot be cleanly reversed is an outage generator. Reversal that ignores integrity is an attacker’s unisolate button. We need a crisp model.
+Isolation now mutates **filters, routes, DNS, Wi‑Fi, and interface state**. Reverse must restore pre-isolate posture. Reverse authorization uses **ReverseProof** (password / break-glass / CP), not a single hard-coded password path.
 
 ## Decision
 
-1. **Snapshot-before-mutate:** no firewall changes until a **restore snapshot** is successfully written and integrity-protected.  
-2. **Snapshot contents:** enough backend-specific state to restore prior posture (exported rules, izolater anchor contents, metadata: schema version, platform, timestamp, profile applied).  
-3. **Integrity:** snapshot MAC or signature using a key derived at install (from high-entropy install key and/or KDF material — exact derivation in implementation ADR follow-up). Tamper ⇒ reverse refused.  
-4. **Reverse gate:** successful **ReverseProof** (password verify for v1) required before restore.  
-5. **Restore semantics:** restore **pre-isolate** posture, not “delete all firewall rules.” Non-izolater changes made during isolation may be tricky — document conflict policy (prefer: restore snapshot baseline; warn if drift detected).  
-6. **Idempotency:** isolate while isolated refreshes metadata but does not destroy the original pre-isolate snapshot unless explicitly re-based (default: keep original).  
-7. **Persistence:** isolation intent survives reboot; on boot, agent/task re-applies profile if state says Isolated (implementation may be a scheduled task/service — design later, requirement now).  
-8. **Break-glass:** if proof unavailable, izolater does not embed a backdoor. Recovery is operational (reimage, offline password reset with physical access policy, or future sealed recovery key if owner approves).
+1. **Snapshot-before-mutate:** no containment changes until a restore snapshot is written and integrity-protected. Snapshot includes all ADR-0001 step categories that will change.  
+2. **Integrity:** MAC/sign with an **install-scoped key** independent of the user password (so CP password clear does not invalidate integrity design). Tamper ⇒ refuse reverse.  
+3. **Reverse gate:** validate `ReverseProof` per auth mode (ADR-0008); then restore.  
+4. **Restore semantics:** restore **pre-isolate** baseline for filters, routes, DNS, Wi‑Fi, interfaces — not “enable everything.” Warn on drift.  
+5. **Idempotent isolate:** keep original pre-isolate snapshot by default.  
+6. **Persistence across reboot:** re-apply hard profile if state is Isolated (service/task design later).  
+7. **Break-glass:** tenant-scoped sister binary / signed proof (ADR-0008) — **not** a global backdoor.  
+8. **Failure:** partial apply attempts rollback from snapshot; if rollback fails → loud degraded state + guidance.
 
 ## Consequences
 
-- Isolate path is slightly slower (snapshot first) — acceptable.  
-- Need storage for snapshots with tight ACLs.  
-- Drift during isolation is an operational edge case to test.
+- Snapshot format is richer and OS-specific sections grow.  
+- Testing matrix expands (Wi‑Fi restore, NIC admin state).  
+- Lost password is recoverable via break-glass/CP without reimage (when those are provisioned).
 
 ## Alternatives considered
 
 | Alternative | Why not |
 | --- | --- |
-| “Just flush firewall on reverse” | Destroys pre-existing org rules |
-| Always-on dual rule tables without snapshot | Harder multiplatform |
-| Hidden vendor unlock | Unacceptable trust model |
+| Flush all network config on reverse | Destroys org baselines |
+| Password-only forever | Owner requested break-glass + mode options |
 
 ## Open questions
 
-- Keep N historical snapshots or exactly one? (Lean: one active + one backup.)  
-- Service vs oneshot login hook for reboot persistence on each OS.
+- One active snapshot + one backup, or more history?  
+- Reboot persistence mechanism per OS (service vs launchd vs systemd).

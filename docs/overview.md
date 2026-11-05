@@ -2,62 +2,57 @@
 
 ## What izolater is
 
-**izolater** is a small, multiplatform **client binary** (Zig, latest stable) that can **quickly isolate an endpoint** during incident response or containment, then **reverse that isolation** only when a **password** is provided.
+**izolater** is a small, multiplatform **client binary** (Zig, latest stable) that can **quickly contain a hostile endpoint**, then **reverse** that containment only when a valid **`ReverseProof`** is presented: reverse quarantine password, **tenant-scoped break-glass** proof, and/or a future **control-plane** capability.
 
-Isolation means cutting the host off from untrusted network paths while preserving a deliberate, audited path back to a recoverable state. Reversal is a first-class operation — not an afterthought — and is gated by a secret established at install time (or supplied by a trusted peer process / future control plane).
+Containment is broader than “a firewall rule”: **packet filters, routes, DNS, Wi‑Fi disconnect, and disabling interfaces** that are not needed for the sole remote exception—the future **control-plane** service (HTTP and/or RPC).
+
+## Hostile environment
+
+The product assumes contested hosts: **malware**, **socket-based remote control**, and **rogue or compromised automation** (including AI agents that can run tools). Goals: cut C2 paths fast, deny clean unisolate without proof, keep recovery possible for IR without a global backdoor. See [threat-model.md](threat-model.md) and [ADR-0005](adr/0005-threat-model-assumptions.md).
 
 ## Why it exists
 
-Endpoint containment tools often either:
-
-- lock an operator out of a reversible path, or
-- make “unisolate” too easy for an attacker who already has host access, or
-- are tied to a vendor control plane from day one.
-
-izolater aims for a **fast local binary** with a **password-gated reverse**, designed so a **future control plane** can drive isolate/unisolate without reinventing the client security model.
+Many containment tools either lock operators out, make unisolate too easy for an on-host adversary, or require a vendor control plane from day one. izolater aims for a **fast local binary**, **proof-gated reverse**, **tenant-bounded break-glass**, and **CP-ready contracts** without implementing the server here.
 
 ## Core user journey
 
-1. **Install** — set reverse password (interactive or supplied by installer/orchestration); persist verifier + isolation policy; optionally register control-plane endpoints (stubs only for now).
-2. **Isolate** — apply platform-native network containment; record pre-state for exact reverse; emit audit events.
-3. **Operate while isolated** — host remains usable for local IR; network egress/ingress restricted per policy.
-4. **Reverse** — present password (CLI / env / stdin / future CP command); verify; restore recorded state; confirm connectivity posture.
+1. **Install** — `tenant_id`, auth mode (`password_required` default), optional password verifier, CP endpoints, break-glass public trust material.  
+2. **Isolate** — snapshot; apply hard profile (filter/routes/DNS/Wi‑Fi/NICs); leave CP path if configured; audit.  
+3. **Operate while isolated** — local IR; remote only to CP (if any); C2 sockets should lose path.  
+4. **Reverse** — password and/or break-glass sister tooling and/or CP proof → restore snapshot.  
+5. **Recover secrets (future CP)** — reset password or change auth mode remotely under mTLS.
 
 ## Design pillars
 
 | Pillar | Meaning |
 | --- | --- |
-| Reversible by design | Every isolate action produces a restore plan; reverse is a first-class command. |
-| Password-gated reverse | Unisolate requires proof of the install-time (or rotated) secret. |
-| Local-first, CP-ready | Works offline as a CLI; contracts assume a future izolater server without implementing it. |
-| Multiplatform | Windows primary for many IR shops; Linux and macOS in the same abstraction model. |
-| Secure defaults | Hash secrets, minimize privilege window, fail closed on reverse, fail safe on isolate where possible. |
-| Validate before code | Threat model, ADRs, and proof gates land before Zig product code. |
+| Hostile-ready | Design for malware, sockets, rogue agents—not clean labs |
+| Reversible | Snapshot-before-mutate; exact restore of containment surfaces |
+| Proof-gated reverse | Password / break-glass / CP — not an open admin convenience API |
+| Tenant-bounded recovery | Sister break-glass blast radius ≤ tenant |
+| Local-first, CP-ready | Offline CLI; server is a separate project |
+| Multiplatform | Windows → macOS → Linux |
+| Validate before code | ADRs stay Proposed until accepted |
 
-## System context (this repo vs server)
+## System context
 
 ```
 ┌─────────────────────────────┐         ┌──────────────────────────┐
 │  izolater client (this repo)│◄───────►│  izolater server (OOS)   │
 │  isolate / reverse / local  │ future  │  control plane, policy,  │
-│  auth verifier, platform I/O│  mTLS   │  fleet, audit aggregation│
+│  auth + break-glass verify  │  mTLS   │  password reset / modes  │
 └─────────────────────────────┘         └──────────────────────────┘
          ▲
-         │ password / config injection
-┌────────┴────────┐
-│ installer / EDR │
-│ / automation    │
-└─────────────────┘
+         │ stdin/file/CP (not env by default)
+┌────────┴────────┐     ┌─────────────────────┐
+│ installer / EDR │     │ tenant sister       │
+│ / automation    │     │ break-glass tooling │
+└─────────────────┘     └─────────────────────┘
 ```
-
-Only the left box and its **client contracts** are in scope here. See [non-goals.md](non-goals.md).
 
 ## Reading order
 
-1. This overview  
-2. [features.md](features.md)  
-3. [adr/](adr/) (especially isolation, crypto, reversibility)  
+1. [izolater-plan.md](izolater-plan.md)  
+2. This overview → [features.md](features.md)  
+3. ADRs 0001, 0005, 0008, then the rest  
 4. [threat-model.md](threat-model.md) + [validation.md](validation.md)  
-5. [directory-structure.md](directory-structure.md)  
-
-Concise entry point for stakeholders: [izolater-plan.md](izolater-plan.md).

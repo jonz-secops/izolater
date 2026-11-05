@@ -1,89 +1,65 @@
 # Client architecture (planning sketch)
 
-## Goals of this sketch
+## Goals
 
-Define module boundaries for the Zig client **before** implementation. No runtime code lives here yet; directories under `src/` are scaffolds only.
+Module boundaries before implementation. Scaffolds only under `src/`.
 
 ## Logical components
 
 ```
-                    ┌──────────── CLI ────────────┐
-                    │ parse args, exit codes, I/O │
-                    └─────────────┬───────────────┘
-                                  │
-         ┌────────────────────────┼────────────────────────┐
-         ▼                        ▼                        ▼
-   ┌───────────┐          ┌──────────────┐         ┌──────────────┐
-   │  config   │          │    auth      │         │ controlplane │
-   │ install + │◄────────►│  password    │         │ client hooks │
-   │ runtime   │          │  verify/KDF  │         │ (future)     │
-   └─────┬─────┘          └──────┬───────┘         └──────┬───────┘
-         │                       │                        │
-         └───────────┬───────────┴────────────┬───────────┘
-                     ▼                        ▼
-              ┌─────────────┐          ┌─────────────┐
-              │  isolation  │◄────────►│  platform   │
-              │ orchestrator│          │  backends   │
-              │ snapshot +  │          │ win/linux/  │
-              │ apply/restore│         │ mac         │
-              └─────────────┘          └─────────────┘
-                     │
-                     ▼
-              ┌─────────────┐
-              │ local audit │
-              └─────────────┘
+                         ┌──────────── CLI ────────────┐
+                         │ no open reverse socket API  │
+                         └─────────────┬───────────────┘
+                                       │
+          ┌────────────────────────────┼────────────────────────────┐
+          ▼                            ▼                            ▼
+    ┌───────────┐               ┌──────────────┐            ┌──────────────┐
+    │  config   │               │    auth      │            │ controlplane │
+    │ tenant +  │◄─────────────►│ ReverseProof │            │ mTLS stubs   │
+    │ modes     │               │ pwd/bg/CP    │            │              │
+    └─────┬─────┘               └──────┬───────┘            └──────┬───────┘
+          │                            │                           │
+          └──────────────┬─────────────┴─────────────┬─────────────┘
+                         ▼                           ▼
+                  ┌─────────────┐             ┌─────────────┐
+                  │  isolation  │◄───────────►│  platform   │
+                  │ snapshot +  │             │ win/darwin/ │
+                  │ apply/restore│            │ linux       │
+                  └──────┬──────┘             └─────────────┘
+                         ▼
+                  ┌─────────────┐     ┌─────────────────────┐
+                  │ local audit │     │ breakglass tooling  │
+                  └─────────────┘     │ (sister artifact)   │
+                                      └─────────────────────┘
 ```
 
-## Component responsibilities
+## Responsibilities
 
-| Component | Responsibility | Must not |
+| Component | Does | Must not |
 | --- | --- | --- |
-| CLI | UX, flags, prompting | Own crypto or firewall APIs directly |
-| config | Paths, policy refs, install metadata | Store plaintext passwords |
-| auth | KDF verify, rotation, injection channels | Talk to network stack |
-| isolation | Snapshot → apply → restore state machine | Embed OS-specific syscalls |
-| platform | OS firewall / net APIs | Know passwords |
-| controlplane | Transport + command contract stubs | Implement server logic |
-| audit | Local event append | Block reverse on log failure without policy |
+| CLI | Commands, prompts, exit codes | Listen unauthenticated for reverse |
+| config | tenant_id, modes, trust material | Store plaintext passwords or BG private keys |
+| auth | Verify password / break-glass / CP proofs | Talk to NICs directly |
+| isolation | State machine; multi-surface apply | Embed OS syscalls |
+| platform | Filters, routes, DNS, Wi‑Fi, NICs | Know secrets |
+| controlplane | Future dial-out mTLS | Implement server |
+| breakglass | Tenant-scoped sign/respond | Work cross-tenant |
+| audit | Append events | Log secrets |
 
-## Isolation state machine (conceptual)
+## Isolation surfaces (orchestrated)
 
-```
-  NotInstalled → Installed → Ready
-                                │
-                     isolate()  ▼
-                            Isolated
-                     reverse()  │
-                                ▼
-                              Ready
-```
+Per ADR-0001: snapshot → DNS → routes → packet filter → Wi‑Fi disconnect → disable non-CP NICs → (optional) session drain.
 
-Transitions require:
+## ReverseProof
 
-- **install** — privileges + password establishment  
-- **isolate** — privileges + writable snapshot slot + healthy backend  
-- **reverse** — privileges + valid password + intact snapshot  
+See ADR-0008. Auth module accepts password, break-glass signature, or CP capability depending on mode and policy.
 
-## Config layers
+## Hostile notes
 
-See ADR-0003. Summary:
+- Prefer oneshot privileged CLI over a fat localhost daemon.  
+- If a service is required for reboot re-apply / watchdog, it must not expose unauthenticated reverse.  
+- Apply path should minimize time C2 sockets remain usable (race window).  
 
-1. **Install-time** — verifier, install id, default profile, optional CP endpoints  
-2. **Runtime** — current isolation state pointer, last action, active profile  
-3. **Ephemeral** — password from env/stdin for one command (never written)
+## Error model
 
-## Control-plane seam
-
-The client exposes a **command contract** (isolate, reverse, status, rotate-secret, apply-profile) and a **transport assumption** (authenticated channel). Implementation of the server is out of scope; see `contracts/` and ADR-0004.
-
-## Error model (planning)
-
-- Distinct exit codes: auth failure, privilege, already-isolated, corrupt state, unsupported platform.  
-- Reverse auth failure must be indistinguishable in timing as far as practical (constant-time verify).  
-- Partial isolate failure → attempt rollback using snapshot; if rollback fails → loud degraded state.
-
-## Testing architecture (pre-code)
-
-- Platform backends behind a narrow interface → mockable for unit tests.  
-- Integration tests on real VMs per OS (see [validation.md](validation.md)).  
-- Security tests: password guess resistance locally, snapshot integrity, privilege drop checks.
+Distinct exit codes: auth failure, privilege, already-isolated, corrupt state, tenant mismatch, unsupported platform. Reverse auth failures: capped throttle, no permanent lockout.

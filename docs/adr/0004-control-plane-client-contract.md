@@ -1,43 +1,51 @@
 # ADR-0004: Control-plane client contract
 
-- Status: Proposed
+- Status: Proposed (revised; **not accepted**)
 - Date: 2026-11-05
 - Deciders: skrappy0x4a (pending acceptance)
 
 ## Context
 
-A future **izolater server** will orchestrate fleets. This repo must not implement that server, but the client must not paint itself into a corner. We need **hooks, contracts, and assumptions** only.
+A future **izolater server** orchestrates fleets. This repo implements **client hooks/contracts only**. Owner additions:
+
+- While isolated, **only** CP services (HTTP/RPC) remain reachable (plus local reverse/break-glass).  
+- CP should eventually **reset** the reverse quarantine password or **remove** the password requirement.
 
 ## Decision
 
-1. **Separate `contracts/` tree** describes versioned client capabilities and message shapes (Markdown now; JSON Schema/protobuf later if needed).  
-2. **Command set** the client can eventually receive (names indicative):  
-   - `Isolate { profile, request_id }`  
-   - `Reverse { proof, request_id }`  
-   - `Status`  
-   - `RotateReverseSecret { … }` (carefully gated)  
-   - `ApplyProfile { … }`  
-3. **Local CLI remains authoritative for v1** — CP transport may be compiled but dormant.  
-4. **Auth assumption:** future channel is mutually authenticated (mTLS or equivalent); client stores trust anchors in install config; **no** “trust any HTTPS.”  
-5. **Reverse proof:** CP may supply either (a) operator-approved capability token, or (b) instruct local password entry — client auth module stays abstract (`ReverseProof`).  
-6. **Allowlist while isolated:** profiles may permit only configured CP endpoints + DNS as needed — so remote reverse remains possible.  
-7. **Server non-goals remain absolute:** no server binary, no multi-tenant policy engine, no cloud account system in this repo.
+1. Keep versioned contracts under `contracts/` (Markdown now; schema later).  
+2. **Command set** (indicative):
+
+   | Command | Purpose |
+   | --- | --- |
+   | `Isolate` | Apply profile; ensure CP allowlist path |
+   | `Reverse` | Restore; `ReverseProof` may be CP capability |
+   | `Status` | State, mode, tenant_id, versions |
+   | `ResetReversePassword` | Set new verifier **without** old password (CP-auth only) |
+   | `SetAuthMode` | e.g. `password_required` → `password_disabled` / `password_optional` |
+   | `RotateBreakGlassTrust` | Update tenant public key / CA material |
+   | `ApplyProfile` | Swap isolation profile |
+
+3. **Transport assumption:** mutually authenticated channel (mTLS or equivalent); client dial-out preferred for NAT; trust anchors in install config.  
+4. **Isolation allowlist:** CP endpoints from install/runtime config are the **only** intentional remote exception in the hard profile (ADR-0001).  
+5. **Local CLI** remains usable offline; CP may be dormant.  
+6. **No server implementation** in this repository.
 
 ## Consequences
 
-- Client can ship value offline.  
-- Server team (later) designs against a published contract.  
-- Risk: over-specifying the contract too early — keep messages minimal until first server spike.
+- Client auth module must treat CP as a first-class `ReverseProof` and config authority for password/mode.  
+- Resetting password or disabling password requirement via CP is a **high-impact** control — must be tightly authenticated and audited.  
+- Hard isolation without reachable CP still needs local password and/or sister break-glass (ADR-0008).
 
 ## Alternatives considered
 
 | Alternative | Why not |
 | --- | --- |
-| Ignore CP until server exists | Likely forces breaking CLI redesign |
-| Embed full agent framework now | Scope explosion |
-| Shell-out RPC only | Weak typing and auth story |
+| Ignore CP until server exists | Would force breaking redesign of allowlist + auth modes |
+| CP always required for reverse | Breaks air-gapped / CP-outage IR |
 
 ## Open questions
 
-- Push (client dials out) vs pull (CP connects) — prefer client dial-out for NAT, confirm later.  
-- Whether reverse via CP can bypass local password entirely in enterprise mode (major policy decision).
+- HTTP vs custom RPC vs both for v1 CP protocol (owner said “probably via http or rpc”).  
+- Can CP reverse with capability **alone** when mode is `password_required`? (**Suggested: yes**, CP proof satisfies the gate; password not also required.)  
+- Authorization model for `SetAuthMode` (which CP roles)?

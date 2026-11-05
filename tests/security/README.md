@@ -1,3 +1,3 @@
 # Security tests (scaffold)
 
-Negative tests for auth, integrity, and privilege boundaries. Tied to [docs/validation.md](../../docs/validation.md).
+Adversarial cases: wrong password, rogue script reverse, snapshot tamper, cross-tenant break-glass, privilege denial, post-isolate egress/socket failure. Tied to [docs/validation.md](../../docs/validation.md) and [docs/threat-model.md](../../docs/threat-model.md).

@@ -1,12 +1,12 @@
 # izolater
 
-Quick, reversible **endpoint isolation** client — multiplatform Zig binary (planned).
+Quick, reversible **endpoint containment** client for **hostile** hosts — multiplatform Zig (planned).
 
-Isolation is **password-gated to reverse**. Password is set at install time and can be supplied by automation or a future control plane. The **izolater server** is a separate project.
+Cuts network/routes/DNS/Wi‑Fi/extra NICs; proof-gated reverse (password, tenant break-glass, future CP). Server is a separate project.
 
 ## Status
 
-**Planning / design only.** No product implementation yet.
+**Planning / design only.** ADRs are **Proposed**, not accepted.
 
 Start here: **[docs/izolater-plan.md](docs/izolater-plan.md)**
 
@@ -14,11 +14,10 @@ Start here: **[docs/izolater-plan.md](docs/izolater-plan.md)**
 | --- | --- |
 | [docs/overview.md](docs/overview.md) | High-level overview |
 | [docs/features.md](docs/features.md) | Prioritized features |
-| [docs/adr/](docs/adr/) | Architectural Decision Records |
-| [docs/threat-model.md](docs/threat-model.md) | Threat model sketch |
+| [docs/threat-model.md](docs/threat-model.md) | Hostile threat model |
+| [docs/adr/](docs/adr/) | ADRs 0001–0008 |
 | [docs/validation.md](docs/validation.md) | Prove-before-code gates |
-| [docs/non-goals.md](docs/non-goals.md) | Out of scope |
-| [contracts/](contracts/) | Future control-plane client contract |
+| [contracts/](contracts/) | Control-plane client contract |
 
 ## License
 

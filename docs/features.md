@@ -1,71 +1,67 @@
 # Required features and functionality
 
-Priorities: **P0** = must ship for useful v0.1 client; **P1** = strong follow-on; **P2** = deferred / nice-to-have. All items are planning targets — not commitments of current code.
+Priorities: **P0** = useful hostile-aware v0.1; **P1** = hardening / multiplatform / break-glass; **P2** = later. Planning targets only.
 
 ## P0 — Minimum viable client
 
 | ID | Feature | Notes |
 | --- | --- | --- |
-| F-01 | Install / bootstrap | Create install root, write config, establish reverse-password verifier, record platform capability probe. |
-| F-02 | Set reverse password | Interactive prompt and non-interactive supply (env var / file / stdin) for automation and peer binaries. |
-| F-03 | Isolate endpoint | Apply network isolation via platform backend; default policy: deny most egress/ingress, allow documented exceptions. |
-| F-04 | Capture restore state | Snapshot firewall/rules/state needed for exact reverse before mutation. |
-| F-05 | Reverse (unisolate) | Require password; verify; restore snapshot; report success/failure clearly. |
-| F-06 | Status | Show isolated vs not, policy id/version, last action time, whether CP is configured (even if unused). |
-| F-07 | Privilege handling | Detect insufficient privileges; refuse mutate ops with actionable error. |
-| F-08 | Audit log (local) | Append-only local events for install, isolate, reverse attempts (success/fail), config changes. |
-| F-09 | Platform: Windows | First target OS for isolation backend (see ADR-0001). |
-| F-10 | CLI surface | `install`, `isolate`, `reverse`/`unisolate`, `status`, `version`; stable exit codes. |
+| F-01 | Install / bootstrap | Install root, ACLs, `tenant_id`, auth mode, capability probe |
+| F-02 | Reverse password (when mode needs it) | Set verifier; inject via stdin/file (env opt-in only) |
+| F-03 | Hard isolate | Filters + routes + DNS + Wi‑Fi disconnect + disable non-CP-path NICs |
+| F-04 | CP path exception | If CP configured, retain minimal HTTP/RPC path; else fail closed on general net |
+| F-05 | Snapshot before mutate | All surfaces in F-03; integrity-protected |
+| F-06 | Reverse via ReverseProof | Password proof for P0; refuse without proof in `password_required` |
+| F-07 | Status | Isolated?, mode, tenant_id, CP configured?, last action |
+| F-08 | Privilege checks | Unprivileged mutate → deny |
+| F-09 | Local audit | install/isolate/reverse success+fail; no secrets in logs |
+| F-10 | Platform: Windows | First backend (ADR-0007) |
+| F-11 | Hostile CLI posture | No unauthenticated listening reverse API |
+| F-12 | Wrong-password throttle | Progressive delay, capped; no permanent brick |
 
-## P1 — Hardening and multiplatform depth
+## P1 — Depth
 
 | ID | Feature | Notes |
 | --- | --- | --- |
-| F-11 | Linux isolation backend | nftables/iptables (or equivalent) behind same trait as Windows. |
-| F-12 | macOS isolation backend | pf (or documented alternative) behind same trait. |
-| F-13 | Password rotation | Rotate verifier with old+new password; audit event. |
-| F-14 | Isolation profiles | Named profiles (e.g. hard / IR-allow-CP / allow-local-subnet) selected at isolate time. |
-| F-15 | Safe allowlist for control plane | While isolated, optionally keep path to configured CP endpoints only. |
-| F-16 | Tamper signals | Detect missing/corrupt restore snapshot or config; refuse silent reverse. |
-| F-17 | Crash / reboot persistence | Isolation and restore metadata survive reboot; re-apply if needed. |
-| F-18 | Control-plane client stubs | TLS client skeleton, command enum, auth hook — no real server required. |
-| F-19 | Uninstall | Reverse if isolated (password), remove artifacts; document residual OS state. |
+| F-13 | macOS backend | Second platform |
+| F-14 | Linux backend | Third platform |
+| F-15 | Break-glass sister tooling | Tenant-scoped verify/sign; challenge–response preferred |
+| F-16 | Auth modes | `password_required` / `password_optional` / `password_disabled` |
+| F-17 | Session drain/kill | Policy for existing non-CP connections (pending owner decision) |
+| F-18 | Tamper detection | Corrupt snapshot/config → refuse reverse |
+| F-19 | Reboot persistence | Re-apply if still Isolated |
+| F-20 | CP client stubs | Isolate/Reverse/Status/`ResetReversePassword`/`SetAuthMode` |
+| F-21 | Password rotation (local) | old+new |
+| F-22 | Profiles | Named hard / CP-only variants |
+| F-23 | Uninstall | Proof if isolated; clean artifacts |
 
 ## P2 — Later
 
 | ID | Feature | Notes |
 | --- | --- | --- |
-| F-20 | Disk / process containment | Beyond network (e.g. process restrictions) — only if threat model expands. |
-| F-21 | Hardware-backed secrets | TPM / Secure Enclave storage for verifier material. |
-| F-22 | Signed policy packs | Externally signed isolation profiles. |
-| F-23 | GUI / tray | Not required for IR binary; optional later. |
-| F-24 | Self-update | Out of band with CP project. |
+| F-24 | Drift watchdog | Detect Wi‑Fi/NIC rollback; re-apply / alert |
+| F-25 | Per-install break-glass certs | Tighter than tenant-only |
+| F-26 | Dual-control break-glass | Two-person rule |
+| F-27 | TPM / hardware secrets | |
+| F-28 | Signed policy packs | |
+| F-29 | Process/disk containment | Only if threat model expands |
+| F-30 | GUI / self-update | |
 
-## Functional requirements (cross-cutting)
+## Cross-cutting requirements
 
-1. **Reversibility** — Isolate without a restorable snapshot must fail closed (do not apply).  
-2. **Password never stored in plaintext** — only KDF verifier (or OS secret reference). See ADR-0002.  
-3. **Automation-friendly** — password and config injectable without TTY.  
-4. **Idempotent isolate** — re-running isolate on already-isolated host is safe and logged.  
-5. **Fail reverse closed** — wrong password → no state change; rate-limit / backoff locally.  
-6. **Observable** — human-readable status + machine-parseable JSON mode (P1).  
-
-## Non-functional targets (planning)
-
-| Area | Target (aspirational until validated) |
-| --- | --- |
-| Isolate latency | Seconds, not minutes, on a healthy endpoint |
-| Binary size | Small static-ish Zig release build |
-| Dependencies | Prefer Zig std + audited crypto; minimize FFI |
-| Languages | Zig latest stable only for product code (when coding starts) |
-| Docs | ADRs + threat model kept current with behavior |
+1. Snapshot missing ⇒ do not isolate.  
+2. No plaintext password at rest.  
+3. Tenant mismatch ⇒ break-glass fails closed.  
+4. Automation without TTY via stdin/file/CP.  
+5. Idempotent isolate; fail reverse closed.  
+6. Distinct audit for password vs break-glass vs CP.  
 
 ## Traceability
 
-Features map into ADRs:
-
-- Isolation mechanics → ADR-0001, ADR-0006  
-- Password / crypto → ADR-0002, ADR-0003  
-- Control plane readiness → ADR-0004  
-- Threat assumptions → ADR-0005, [threat-model.md](threat-model.md)  
-- Multiplatform → ADR-0007  
+- Isolation → ADR-0001, 0006  
+- Crypto / injection / throttle → ADR-0002  
+- Config → ADR-0003  
+- CP → ADR-0004  
+- Hostile assumptions → ADR-0005, threat-model  
+- Platforms → ADR-0007  
+- Break-glass / modes → ADR-0008  

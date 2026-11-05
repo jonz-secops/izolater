@@ -1,24 +1,21 @@
 # Client ↔ control-plane contracts
 
-This directory holds **client-side assumptions and command contracts** for a future **izolater server**.
+Client-side assumptions only — **no server implementation**.
 
-- **In scope:** versioned command names, auth expectations, allowlist semantics while isolated, error shapes.  
-- **Out of scope:** server implementation, fleet policy UI, multi-tenant cloud.
+Normative draft: [docs/adr/0004-control-plane-client-contract.md](../docs/adr/0004-control-plane-client-contract.md).
 
-Until schemas are formalized, treat [docs/adr/0004-control-plane-client-contract.md](../docs/adr/0004-control-plane-client-contract.md) as the normative draft.
+## Draft commands
 
-## Draft command list (indicative)
+| Command | Notes |
+| --- | --- |
+| `Isolate` | profile + request_id; ensure CP allowlist path |
+| `Reverse` | `ReverseProof` (CP capability) |
+| `Status` | state, auth mode, tenant_id |
+| `ResetReversePassword` | set new verifier without old password (CP-auth) |
+| `SetAuthMode` | password_required / optional / disabled |
+| `RotateBreakGlassTrust` | update tenant public trust |
+| `ApplyProfile` | swap profile while isolated |
 
-| Command | Direction | Notes |
-| --- | --- | --- |
-| `Isolate` | CP → client | Includes profile id + request id |
-| `Reverse` | CP → client | Carries `ReverseProof` (capability or password-driven flow) |
-| `Status` | CP ↔ client | Isolation state, versions, health |
-| `RotateReverseSecret` | CP → client | Highly sensitive; may remain local-only at first |
-| `ApplyProfile` | CP → client | Swap isolation profile while isolated |
+Transport: mutually authenticated (mTLS or equivalent); client dial-out preferred. While isolated, **only** these CP endpoints should remain remotely reachable (ADR-0001).
 
-Transport assumption: mutually authenticated channel (mTLS or equivalent); client dial-out preferred for NAT.
-
-## Versioning
-
-When the first schema file lands, use `contracts/vN/` and never break `vN` in place — add `vN+1`.
+Hostile note: unauthenticated or MITM CP is treated as fleet-scale compromise — pinning/trust anchors are mandatory in the design.
