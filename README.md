@@ -8,6 +8,13 @@ Cuts network/routes/DNS/Wi‑Fi/extra NICs; proof-gated reverse (password, tenan
 
 **Planning / design only.** ADRs are **Proposed**, not accepted.
 
+## Branch policy
+
+| Branch | Role |
+| --- | --- |
+| `master` | Protected; do not land agent experiments here directly |
+| `agentic` | Integration base for agentic / Cloud Agent worktrees and follow-on branches |
+
 Start here: **[docs/izolater-plan.md](docs/izolater-plan.md)**
 
 | Doc | Description |

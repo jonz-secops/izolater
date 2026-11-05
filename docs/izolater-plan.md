@@ -1,7 +1,7 @@
 # izolater — user-facing plan
 
 **Status:** planning in review (ADRs **not** accepted) · **Code:** none yet  
-**Repo:** [jonz-secops/izolater](https://github.com/jonz-secops/izolater)
+**Repo:** [jonz-secops/izolater](https://github.com/jonz-secops/izolater) · **Agent base branch:** `agentic` (`master` protected)
 
 ## 1. High-level overview
 
