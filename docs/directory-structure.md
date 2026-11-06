@@ -15,7 +15,10 @@ izolater/
 │   ├── non-goals.md
 │   ├── directory-structure.md
 │   ├── tenancy.md             # tenant_id pattern + samples
+│   ├── feature-inventory.md   # exhaustive INV-* catalog
+│   ├── multi-agent-dev.md     # multi-agent operating model
 │   └── adr/                   # ADR-0001 … 0008
+├── AGENTS.md                  # root brief for coding agents
 ├── contracts/                 # client↔CP assumptions (HTTPS+mTLS)
 ├── config/                    # tenants.example.toml, samples
 ├── scripts/

@@ -6,7 +6,10 @@ Planning docs for the **izolater client** — multiplatform Zig containment bina
 | --- | --- |
 | [izolater-plan.md](izolater-plan.md) | Concise user-facing plan |
 | [overview.md](overview.md) | Product & technical overview |
-| [features.md](features.md) | Prioritized features |
+| [feature-inventory.md](feature-inventory.md) | Exhaustive major + supporting features |
+| [features.md](features.md) | Prioritized delivery backlog |
+| [multi-agent-dev.md](multi-agent-dev.md) | Multi-agent / multi-provider readiness |
+| [../AGENTS.md](../AGENTS.md) | Root agent brief |
 | [tenancy.md](tenancy.md) | tenant_id pattern + fictitious samples |
 | [architecture.md](architecture.md) | Client architecture sketch |
 | [threat-model.md](threat-model.md) | Hostile threat model |

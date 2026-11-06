@@ -2,6 +2,8 @@
 
 Planning targets only. ADRs Proposed.
 
+> **Thin delivery backlog.** For every major + supporting capability (with ADR traceability), use **[feature-inventory.md](feature-inventory.md)**. ADRs alone do **not** enumerate the full feature set.
+
 ## P0
 
 | ID | Feature | Notes |

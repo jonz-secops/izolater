@@ -23,7 +23,7 @@ Deeper: [overview.md](overview.md) · [architecture.md](architecture.md) · [thr
 | **P1** | macOS→Linux · CP HTTPS/mTLS stubs · break-glass sister (tenant / tenant+host / install) · BT/cellular feature flags · reboot persistence · tamper detection |
 | **P2** | Optional drift watchdog · TPM · dual-control · signed policies |
 
-Full list: [features.md](features.md)
+Delivery backlog: [features.md](features.md) · **Exhaustive catalog:** [feature-inventory.md](feature-inventory.md) · Multi-agent setup: [multi-agent-dev.md](multi-agent-dev.md) · Root [AGENTS.md](../AGENTS.md)
 
 ## 3. ADRs (all still **Proposed**)
 
