@@ -1,62 +1,77 @@
-# ADR-0008: Break-glass sister binary and reverse auth modes
+# ADR-0008: Reverse authorization (modes, proofs, sister scopes)
 
 - Status: Proposed (**not accepted**)
-- Date: 2026-11-05
-- Deciders: skrappy0x4a (pending acceptance)
-- Related: ADR-0002, ADR-0004, ADR-0005, ADR-0006, [tenancy.md](../tenancy.md)
+- Date: 2026-11-05 · Revised: 2026-11-06
+- Deciders: skrappy0x4a (pending)
+- **Intent:** Answer **who may unisolate** on a hostile host without inventing a global unlock—and without stranding IR when the password is lost.
+- **Owns:** Auth modes, `ReverseProof` kinds, break-glass scopes, admin-alone-when-password-off, audit distinctions for reverse paths.
+- **Defers:** Password storage/KDF/injection → [0002](0002-crypto-password-handling.md); CP transport → [0004](0004-control-plane-client-contract.md); restore mechanics → [0006](0006-reversibility-model.md); IDs → [tenancy.md](../tenancy.md).
+
+## Fits in the system
+
+0008 sits **in front of** 0006 restore. 0002 supplies one proof type (password). 0004 supplies another (CP capability). Sister tooling supplies break-glass. 0005 forbids turning izolater into an unauthenticated unisolate API. 0003 persists mode, scope, and public trust—not private keys.
 
 ## Context
 
-Lost reverse password must not imply global backdoor or mandatory reimage. Owner decisions:
-
-- If **password is off** (`password_optional` without using a password, or `password_disabled`): **local admin alone may reverse**.  
-- **Tenant installs:** break-glass scope option **`tenant`** or **`tenant_and_host`** (highest security).  
-- **Non-tenant (standalone) installs:** **per-install** sister only.  
-- OR vs AND for password⊕break-glass: owner unsure — **recommendation recorded below, not accepted**.
+Owner wants: password optional/required modes; if password is **off**, **admin alone may reverse**; tenant sister scopes `tenant` or `tenant_and_host`; standalone → per-install sister; max blast radius = tenant.
 
 ## Decision
 
 ### Auth modes
 
-| Mode | Local reverse |
-| --- | --- |
-| `password_required` (default for hostile) | Password **or** break-glass **or** CP proof (OR composition recommended) |
-| `password_optional` | Admin alone **or** password if supplied **or** break-glass/CP |
-| `password_disabled` | **Admin alone** (no verifier); still audit. Break-glass/CP optional extras |
+| Mode | Who may reverse locally | Hostile note |
+| --- | --- | --- |
+| `password_required` (default for hostile templates) | Valid password proof **or** break-glass **or** CP proof | Strong default |
+| `password_optional` | Admin alone, **or** password if set, **or** BG/CP | Weaker; document |
+| `password_disabled` | **Admin alone** (no verifier) | Weakest vs admin malware; document |
+
+### ReverseProof (OR composition — recommendation)
+
+Accepted proof kinds (any one unless a future dual-control policy says otherwise):
+
+1. **PasswordProof** — 0002 verify  
+2. **BreakGlassProof** — signed capability bound per scope below  
+3. **ControlPlaneProof** — 0004 capability  
+
+**Recommended default: OR** (password ∨ break-glass ∨ CP). AND would defeat lost-password recovery. Optional later: `break_glass_requires_password` for high-assurance tenants. **Owner has not accepted OR yet**—treat as recommendation.
 
 ### Break-glass scopes
 
-| Enrollment | Allowed `break_glass_scope` |
-| --- | --- |
-| `tenant` | `tenant` — sister/key covers all hosts in `tenant_id` |
-| `tenant` | `tenant_and_host` — proof must match `tenant_id` **and** `install_id` |
-| `standalone` | `install` — per-install sister only; no cross-host tenant key |
+| Enrollment | `break_glass_scope` | Binding |
+| --- | --- | --- |
+| `tenant` | `tenant` | `tenant_id` only — one sister covers the tenant |
+| `tenant` | `tenant_and_host` | `tenant_id` **and** `install_id` — highest security |
+| `standalone` | `install` | `install_id` only |
 
-Cross-tenant or wrong `install_id` (when required) → **fail closed**. Max blast radius for tenant keys = that tenant.
+Cross-tenant or wrong host binding → **fail closed**. **No global vendor key.**
 
-### Cryptographic sketch
+### Sister tooling principles
 
-- Tenant (or install) keypair/CA; **private key never on endpoint**.  
-- Endpoint stores public trust + `tenant_id` / `install_id` as applicable.  
-- Challenge–response short-lived `BreakGlassProof` preferred.  
-- See [tenancy.md](../tenancy.md) for ID pattern and fictitious samples.
-
-### OR vs AND (recommendation — awaiting owner)
-
-**Default OR** so lost-password recovery works. Optional future policy `break_glass_requires_password` for AND/dual-control. Until owner accepts, document both; implementer must not assume AND.
+- Separate artifact; private key in vault/HSM—**never on the endpoint**.  
+- Endpoint holds public trust only (0003).  
+- Prefer challenge–response, short-lived, single-use proofs.  
+- Offline USB path should work when CP is down (USB not disabled—0001).
 
 ### Audit
 
-Distinct high-severity events for admin-alone reverse, password reverse, break-glass, CP reverse/mode/password changes.
+Distinct high-severity events: password reverse · break-glass · CP · **admin-alone**.
 
 ## Consequences
 
-- `password_disabled` + admin reverse is **weak under hostile admin malware** — explicit product warning.  
-- Standalone and tenant codepaths both first-class.  
-- `tenant_and_host` increases ops cost (per-host enrollment material).
+- Product can offer convenience modes without lying about hostile strength.  
+- Tenancy becomes mandatory thinking even before the server exists.  
+- `tenant_and_host` costs more ops (per-host material).
 
-## Open questions
+## Alternatives rejected
 
-- Owner accept of OR default?  
-- Offline USB sister required for GA? (recommended yes)  
-- Who operates per-host cert issuance pre-CP?
+| Alternative | Why rejected |
+| --- | --- |
+| Global unlock | Violates tenant blast-radius ceiling |
+| Reimage-only recovery | Too harsh for IR; owner asked for sister path |
+| Same binary + hidden flag | Malware-reuse and unclear trust |
+
+## Open
+
+- Accept OR default?  
+- Offline sister required for GA? (recommend yes)  
+- Pre-CP issuance process for `tenant_and_host` certs.

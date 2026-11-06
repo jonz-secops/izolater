@@ -1,37 +1,45 @@
-# ADR-0007: Multiplatform strategy
+# ADR-0007: Delivery platforms (Zig, OS order, parity)
 
-- Status: Proposed (revised; **not accepted**)
-- Date: 2026-11-05
-- Deciders: skrappy0x4a (pending acceptance)
+- Status: Proposed (**not accepted**)
+- Date: 2026-11-05 · Revised: 2026-11-06
+- Deciders: skrappy0x4a (pending)
+- **Intent:** Ship **one** containment product across OSes without forking the security model—**Windows first**, then macOS, then Linux—in Zig.
+- **Owns:** Language, OS order, backend layout, parity rules, break-glass packaging order.
+- **Defers:** What isolate does → [0001](0001-platform-isolation-mechanisms.md); auth → [0008](0008-break-glass-and-auth-modes.md)/[0002](0002-crypto-password-handling.md).
+
+## Fits in the system
+
+0007 is **how we build and sequence** the actuators in 0001 and the sister tooling in 0008. It does not invent a different threat model per OS—0005 applies everywhere. Gaps surface in `status`, never as silent no-ops.
 
 ## Context
 
-Multiplatform Zig (latest) client. Owner confirmed ship order.
+Owner confirmed order: Windows → macOS → Linux. Shared CLI/auth/orchestrator from day one; backends gate on OS.
 
 ## Decision
 
-1. **Language:** Zig **latest stable** at implementation start; pin when coding begins.  
-2. **Ship order:** **Windows → macOS → Linux**. Shared CLI/auth/orchestrator first; backends gate on OS.  
-3. **Layout:** `src/platform/{windows,darwin,linux}` behind `src/isolation`.  
-4. **CI (future):** privileged matrix; Wi‑Fi/NIC tests may need hardware or suitably capable VMs.  
-5. **Parity policy:** same commands; OS limitations visible in `status` / docs; no silent no-ops.  
-6. **Linking:** predictable Zig-friendly builds; no heavy helper runtimes on the mutate path.  
-7. **Sister break-glass tooling** follows the same OS order for packaging, but crypto/tenant binding is shared.
+1. **Zig latest stable** at implementation start; pin in toolchain docs then.  
+2. **Ship order: Windows → macOS → Linux.**  
+3. **Layout:** `src/platform/{windows,darwin,linux}` behind `src/isolation` orchestrator.  
+4. **Parity:** same commands; unsupported/partial surfaces reported honestly.  
+5. **One binary owns mutate path**—no Python/Electron helper for isolate/reverse.  
+6. **Sister break-glass** packaging follows the same OS order; crypto/tenant binding shared.  
+7. **CI (when coding):** privileged matrix; radio/NIC tests may need capable VMs/hardware.
 
 ## Consequences
 
-- Early releases may be Windows-only for isolation backends.  
-- macOS Wi‑Fi/DNS APIs need early spikes after Windows.  
-- Linux third — servers still covered, just later.
+- Early useful releases may be Windows-backend-only.  
+- macOS Wi‑Fi/DNS spikes follow Windows learning.  
+- Linux server variants (e.g. no NetworkManager) need explicit DNS/NIC strategy later.
 
-## Alternatives considered
+## Alternatives rejected
 
-| Alternative | Why not |
+| Alternative | Why rejected |
 | --- | --- |
-| Windows → Linux → macOS | Owner reordered to put macOS second |
-| All three at once | Quality risk |
+| Windows → Linux → macOS | Owner reordered |
+| Three backends in first slice | Quality risk under hostile bar |
+| Per-OS script wrappers for core mutate | Breaks “one binary” ops + security review story |
 
-## Open questions
+## Open
 
-- Minimum OS versions for each platform.  
-- Whether Linux server images without NetworkManager need a distinct DNS/interface strategy.
+- Minimum OS versions.  
+- Linux without NetworkManager: resolver/interface strategy.

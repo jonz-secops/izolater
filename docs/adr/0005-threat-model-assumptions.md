@@ -1,68 +1,50 @@
-# ADR-0005: Threat model assumptions
+# ADR-0005: Hostile-by-default threat posture
 
-- Status: Proposed (revised; **not accepted**)
-- Date: 2026-11-05
-- Deciders: skrappy0x4a (pending acceptance)
-- Related: [threat-model.md](../threat-model.md), ADR-0001, ADR-0008
+- Status: Proposed (**not accepted**)
+- Date: 2026-11-05 · Revised: 2026-11-06
+- Deciders: skrappy0x4a (pending)
+- **Intent:** Make “hostile endpoint” the **default design context** and set an honest enforcement ceiling every other ADR must respect.
+- **Owns:** Adversary classes, security goals/non-goals of protection, product posture language.
+- **Defers:** Concrete isolate steps → [0001](0001-platform-isolation-mechanisms.md); reverse authorization → [0008](0008-break-glass-and-auth-modes.md); snapshot integrity → [0006](0006-reversibility-model.md). Detail sketch → [threat-model.md](../threat-model.md).
+
+## Fits in the system
+
+0005 is the **frame**. 0001/0006 implement containment+restore under that frame. 0002/0008/0004 implement *authorized* reverse so izolater is not a convenience unisolate API for malware or rogue agents. 0007 ships the same posture on each OS.
 
 ## Context
 
-izolater is an **incident-containment** tool. It must be designed for a **hostile endpoint**: malware, unauthorized remote control (including socket-based C2 / RAT), and **rogue or compromised automation** (including “rogue AI” agents that can spawn processes, call CLIs, or open sockets). Security claims must stay honest about privilege ceilings while still maximizing attacker cost and minimizing clean abuse of izolater itself.
+izolater will run on machines that may already host malware, socket-based RAT/C2, or compromised automation (including tool-using AI). Lab-clean assumptions produce the wrong product.
 
-## Decision — environment we prepare for
+## Decision
 
-1. **Hostile host is the default design context**, not an edge case. Assume active adversaries try to: keep C2 sockets alive, re-open egress, call `izolater reverse`, steal secrets, corrupt snapshots, kill izolater, or socially/automatically abuse install tooling.  
-2. **Adversary classes explicitly in scope for design:**  
-   - Remote network attackers and socket-based C2 / RAT channels  
-   - Local malware (user and admin-equivalent)  
-   - Rogue or compromised local agents (scripts, EDR plugins, AI tooling) that can execute commands as some principal  
-3. **Isolation goal under hostility:** cut general network paths (filters, routes, DNS, Wi‑Fi, extraneous NICs) so remote control sockets **lose their path**, with the only intentional remote exception being authenticated **CP** endpoints when configured (ADR-0001).  
-4. **izolater is not a trustworthy RPC server for the world:** mutate operations are local CLI / future mutually authenticated CP only — no unauthenticated local socket API that malware can casually drive.  
-5. **Privilege:** isolate/reverse require administrator / root. Unprivileged callers always fail closed.  
-6. **Admin-equivalent adversary ceiling (honest):** a process with SYSTEM/root can often disable host firewalls, re-enable NICs, or patch binaries. We still:  
-   - prevent *clean* reverse via izolater without a valid `ReverseProof`  
-   - integrity-check snapshots/config  
-   - avoid plaintext secrets  
-   - make silent abuse noisy via audit  
-   - avoid shipping global unlock keys  
-7. **Rogue AI / automation:** treat as a local principal with whatever OS rights it has. Password injection must not default to world-readable channels; CP and break-glass proofs must not be forgeable by “just ask the CLI.” Prefer designs where a compromised script **without** the password/tenant key cannot unisolate.  
-8. **Operators** protect reverse password and tenant break-glass keys out-of-band.  
-9. **Honest failure:** refuse isolate if snapshot/restore cannot be guaranteed; refuse reverse on tamper.  
-10. **CP untrusted until mutually authenticated**; absence of CP is normal.  
-11. **Auth modes** (`password_required` default) exist because some tenants accept weaker local reverse; hostile-environment deployments should prefer `password_required` + break-glass + CP (ADR-0008).
+1. **Hostile is default**, not an edge case. Design against: surviving C2 sockets, re-opening egress, calling reverse without secrets, stealing injection channels, corrupting snapshots, killing the tool.  
+2. **In-scope adversaries:** remote C2 operators; local malware (user and admin-equivalent); rogue/compromised local agents that can shell out.  
+3. **Success for isolate:** the remote controller **loses the channel** (see 0001)—not “a firewall rule was inserted.”  
+4. **izolater is not a public RPC service.** Mutate paths = privileged local CLI and/or mutually authenticated CP only. No unauthenticated reverse listener.  
+5. **Privilege gate:** isolate/reverse require admin/root; unprivileged callers fail closed.  
+6. **Honest ceiling:** SYSTEM/root malware can fight the OS network stack outside izolater. We still deny *clean* reverse without a valid proof (0008), integrity-check snapshots (0006), avoid plaintext secrets (0002), audit loudly, and forbid global unlock keys (0008).  
+7. **Weak auth modes** (`password_optional` / `password_disabled`) are allowed as product options but **incompatible with strong hostile claims**—docs must warn (0008).  
+8. **Operators** own out-of-band protection of passwords and tenant break-glass keys.  
+9. **CP is untrusted until mTLS** (0004); absence of CP is normal.
 
-## Decision — we explicitly do not assume
+## We do not assume
 
-- Secure boot / measured boot / ELAM as required for v1  
-- That packet filters are the only path packets can take (VM switches, etc.)  
-- That environment variables are secret  
-- That users never lose the password  
-- That izolater can stop a determined admin-equivalent attacker from *manually* undoing OS network state outside our tool  
+Secure boot/ELAM as v1 requirements · env vars as secrets · users never lose passwords · that izolater can stop out-of-band manual undoing of OS network state by admin malware.
 
 ## Consequences
 
-- Product positioning: **contain and raise cost**, not “immune to SYSTEM malware.”  
-- Feature work includes anti-abuse of the reverse API, tamper detection, and cutting socket C2 paths — not only “set a firewall rule.”  
-- `password_optional` / `password_disabled` are **incompatible with strong hostile-host claims**; docs must warn.  
-- Validation must include adversarial scenarios (malware calling reverse, corrupting snapshot, trying to keep a socket alive across isolate).
+- Positioning: **contain and raise cost**, not “immune to SYSTEM.”  
+- Validation must include adversarial cases (validation.md).  
+- Convenience features that widen local abuse surface are rejected by default.
 
-## Alternatives considered
+## Alternatives rejected
 
-| Stance | Why rejected |
+| Alternative | Why it fails izolater |
 | --- | --- |
-| “Lab-clean hosts only” | Owner requires hostile preparation |
-| “Guarantee enforcement vs SYSTEM” | Needs stronger root of trust than planned v1 |
-| Open local daemon socket for convenience | Large malware/rogue-agent abuse surface |
+| Lab-clean host assumption | Owner requires hostile prep |
+| “Guaranteed vs SYSTEM” | Needs stronger root of trust than planned client |
+| Localhost reverse daemon for DX | Rogue agents / malware abuse |
 
-## Suggestions
+## Open
 
-1. No listening reverse API on `0.0.0.0` / unauthenticated localhost by default.  
-2. Optional later: authenticated local IPC with explicit allowlist of caller binaries — still hostile-aware.  
-3. Consider binary + config integrity checks (signature) before mutate.  
-4. Document “race”: isolate should terminate or freeze non-CP sockets where the OS allows (connection drain / block) as part of apply.
-
-## Open questions
-
-- Should v1 attempt to **reset/kill existing TCP sessions** (not only block new packets)?  
-- Is a persistently running izolater service required for reboot re-apply in hostile conditions, or is oneshot + OS persistence enough?  
-- Formal ADR acceptance still pending.
+- Reboot re-apply: oneshot+OS task vs long-lived service (feeds 0006/0007 spikes)—service must still expose **no** unauthenticated reverse.

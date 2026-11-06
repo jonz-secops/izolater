@@ -1,57 +1,58 @@
-# ADR-0002: Crypto and password handling
+# ADR-0002: Quarantine password material
 
-- Status: Proposed (revised; **not accepted**)
-- Date: 2026-11-05
-- Deciders: skrappy0x4a (pending acceptance)
-- Related: ADR-0008 (auth modes / break-glass), ADR-0004 (CP reset)
+- Status: Proposed (**not accepted**)
+- Date: 2026-11-05 · Revised: 2026-11-06
+- Deciders: skrappy0x4a (pending)
+- **Intent:** Handle the **quarantine password** so it supports humans, scripts, and future CP—without becoming malware-readable ambient state or collapsing snapshot integrity when the password is cleared.
+- **Owns:** Verifier format (Argon2id), injection channel ranking, throttle/IR tradeoff, separation from install integrity keys.
+- **Defers:** Whether a password is required at all → [0008](0008-break-glass-and-auth-modes.md); CP reset command → [0004](0004-control-plane-client-contract.md); where verifier lives on disk → [0003](0003-install-vs-runtime-config.md).
+
+## Fits in the system
+
+0002 implements **one** `ReverseProof` kind. It does not decide *policy* for admin-alone or break-glass—that’s 0008. It deliberately does **not** own snapshot MACs (0006) so CP password reset cannot gut restore integrity.
 
 ## Context
 
-Reverse may require a **reverse quarantine password**, depending on auth mode (ADR-0008). The password is set at install when the mode uses one, and must support **scripted install** plus a **future control plane**. Owner ask: choose the **safest injection approach** that still enables automation and CP.
+Password may be set at install and must be injectable by automation and CP. Owner: safest channels that still enable scripts; wrong-password behavior must not permanently brick IR.
 
 ## Decision
 
-1. **Never store plaintext passwords** on disk. Store an **Argon2id** verifier + unique salt + parameter set when a password is configured.  
-2. **Modes without a password** (`password_optional` without setting one, or `password_disabled`) store mode flags only — no verifier.  
-3. **Verify:** constant-time compare; failure ⇒ no state change; apply throttling policy (below).  
-4. **Password injection — security preference order (normative intent):**  
+1. **No plaintext at rest.** When a password exists: Argon2id verifier + unique salt + recorded parameters.  
+2. **No verifier** when mode is password-disabled (or optional with none set)—mode flags only (0008).  
+3. **Verify:** constant-time compare; failure → no 0006 restore; throttle below.  
+4. **Injection ranking (safest practical first):**
 
-   | Rank | Channel | Use |
+   | Rank | Channel | Role |
    | --- | --- | --- |
-   | 1 | **Future CP authenticated channel** | Remote set/reset/reverse authorization |
-   | 2 | **Stdin** (piped, no echo) | Scripted install/reverse; preferred local automation |
-   | 3 | **Restricted secret file** (`--password-file`, mode 0600 / ACL admin-only) | Installers that cannot hold stdin open |
-   | 4 | **Interactive TTY prompt** | Human IR |
-   | 5 | **Environment variable** | **Disabled by default**; opt-in only via explicit install flag — process-list / crash-dump exposure |
+   | 1 | CP mTLS channel | Remote set/reset/authorize (0004) |
+   | 2 | stdin (no echo) | Preferred local automation |
+   | 3 | ACL-restricted password file | Installers without durable stdin |
+   | 4 | TTY prompt | Human IR |
+   | 5 | Environment variable | **Off by default**; explicit opt-in only |
 
-5. **Do not** recommend embedding passwords on argv (`--password secret`) — visible in process listings; if a flag exists for broken installers, document as insecure and prefer file/stdin.  
-6. **Memory hygiene:** zeroize password buffers after use (best effort).  
-7. **Rotation / reset:** local rotation with old+new; **CP may reset verifier or clear password requirement** without old password once CP trust is established (client contract; server OOS).  
-8. **Wrong-password / IR tradeoff (accepted direction):**  
-
-   - Progressive delay after failures (e.g. ~0s, 1s, 2s, 4s … capped at a modest ceiling such as 15–30s).  
-   - **No permanent local lockout** that bricks IR when break-glass/CP is unavailable.  
-   - Optional soft threshold that requires break-glass or delay ceiling — never irreversible lock without ADR-0008 path.  
-   - All failures audited.  
-
-9. **Break-glass and CP proofs** are not passwords; see ADR-0008. Snapshot integrity keys should be **independent install keys**, not derived solely from the user password (so CP password clear does not weaken snapshot MAC).
+5. **Avoid argv secrets** (process listing).  
+6. **Zeroize** password buffers after use (best effort).  
+7. **Local rotate** with old+new; **CP may reset/clear** without old password once trusted (0004)—integrity keys unaffected.  
+8. **Throttle:** progressive delay, modest cap (≈15–30s); **no permanent local lockout**; failures audited. Break-glass/CP remain available (0008).  
+9. **Install integrity key ≠ password-derived** (feeds 0006).
 
 ## Consequences
 
-- Scripted setup remains practical without defaulting to env vars.  
-- CP becomes the best remote secret channel when it exists.  
-- Throttling slows online guessing without creating a self-DoS dead end.
+- Scripts work without teaching env-var password culture.  
+- Rogue agents without the secret can’t casually satisfy PasswordProof.  
+- IR remains recoverable via 0008 paths if password is lost mid-throttle.
 
-## Alternatives considered
+## Alternatives rejected
 
-| Alternative | Why not |
+| Alternative | Why rejected |
 | --- | --- |
-| Env-var-first automation | Too easy to leak via process/environ |
-| Hard lockout after N tries | Unacceptable IR risk if password lost mid-incident |
-| Reversible encrypted password at rest | Raises theft blast radius |
+| Env-first automation | Hostile/rogue-agent readable |
+| Hard lockout after N tries | Bricks IR when password lost |
+| Reversible encrypted password at rest | Theft blast radius |
+| Derive snapshot MAC only from password | Breaks on CP password clear |
 
-## Open questions
+## Open
 
-- Minimum length / complexity: enforce vs warn?  
-- Exact delay curve numbers (tune in spike).  
-- Whether `password_optional` still *allows* setting a verifier for “password if you have it.”
+- Enforce vs warn on password complexity.  
+- Exact delay curve (tune in spike).  
+- Confirm `password_optional` may carry an unused-capable verifier (“password if you have it”).

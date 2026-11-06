@@ -25,18 +25,20 @@ Deeper: [overview.md](overview.md) · [architecture.md](architecture.md) · [thr
 
 Delivery backlog: [features.md](features.md) · **Exhaustive catalog:** [feature-inventory.md](feature-inventory.md) · Multi-agent setup: [multi-agent-dev.md](multi-agent-dev.md) · Root [AGENTS.md](../AGENTS.md)
 
-## 3. ADRs (all still **Proposed**)
+## 3. ADRs (all still **Proposed** — rewritten as one architecture)
 
-| ADR | Topic |
+Read [adr/README.md](adr/README.md) for how they compose. Each ADR now states **Intent / Owns / Defers**.
+
+| ADR | Intent |
 | --- | --- |
-| [0001](adr/0001-platform-isolation-mechanisms.md) | Hard isolate + TCP kill + cache flush; BT/cellular flags; USB untouched |
-| [0002](adr/0002-crypto-password-handling.md) | Argon2id; stdin/file/CP; capped throttle |
-| [0003](adr/0003-install-vs-runtime-config.md) | Install vs runtime; tenancy fields |
-| [0004](adr/0004-control-plane-client-contract.md) | CP over HTTPS+mTLS; password reset / mode change |
-| [0005](adr/0005-threat-model-assumptions.md) | Hostile assumptions |
-| [0006](adr/0006-reversibility-model.md) | Rich snapshot; proof-gated reverse |
-| [0007](adr/0007-multiplatform-strategy.md) | Windows → macOS → Linux |
-| [0008](adr/0008-break-glass-and-auth-modes.md) | Sister scopes + admin-alone when password off |
+| [0005](adr/0005-threat-model-assumptions.md) | Hostile-by-default frame |
+| [0001](adr/0001-platform-isolation-mechanisms.md) | Hard-isolate mutation sequence |
+| [0006](adr/0006-reversibility-model.md) | Snapshot integrity + restore (twin of 0001) |
+| [0008](adr/0008-break-glass-and-auth-modes.md) | Who may reverse (modes, proofs, sister scopes) |
+| [0002](adr/0002-crypto-password-handling.md) | Password material only |
+| [0003](adr/0003-install-vs-runtime-config.md) | Identity stores / config layers |
+| [0004](adr/0004-control-plane-client-contract.md) | CP client seam (HTTPS+mTLS) |
+| [0007](adr/0007-multiplatform-strategy.md) | Zig + Win→macOS→Linux delivery |
 
 ## 4. Repo layout
 

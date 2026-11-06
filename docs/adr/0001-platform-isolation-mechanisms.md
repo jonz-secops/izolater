@@ -1,58 +1,71 @@
-# ADR-0001: Platform isolation mechanisms
+# ADR-0001: Hard-isolate mutation sequence
 
-- Status: Proposed (revised; **not accepted**)
-- Date: 2026-11-05
-- Deciders: skrappy0x4a (pending acceptance)
+- Status: Proposed (**not accepted**)
+- Date: 2026-11-05 · Revised: 2026-11-06
+- Deciders: skrappy0x4a (pending)
+- **Intent:** Define **exactly what izolater changes** on isolate so a remote controller loses the channel—while leaving USB and a future CP path intact.
+- **Owns:** Mutation sequence, radio/NIC policy, CP allowlist *as a network exception*, success metric for isolate.
+- **Defers:** Snapshot/restore/integrity → [0006](0006-reversibility-model.md); threat ceiling → [0005](0005-threat-model-assumptions.md); CP protocol → [0004](0004-control-plane-client-contract.md); OS ship order → [0007](0007-multiplatform-strategy.md).
+
+## Fits in the system
+
+0001 is the **actuator**. 0006 is its twin (nothing in this sequence applies without a restorable snapshot). 0005 demands the sequence kill C2, not decorate firewalls. 0004 names which endpoints may remain in the allowlist. 0003 holds the feature flags that gate Bluetooth/cellular.
 
 ## Context
 
-Hard containment on hostile endpoints: cut remote control paths while remaining reversible. Owner refinements: **kill existing TCP sessions**, **clear DNS/ARP-related caches**, optional **Bluetooth / cellular** disable via feature flags, **never disable USB**.
+Firewall-only quarantine is too weak for izolater’s hostile brief. Owner direction: filters **and** routes **and** DNS **and** TCP kill **and** cache flush **and** Wi‑Fi/NIC actions; optional BT/cellular; **never USB**.
 
 ## Decision
 
-1. **Default hard profile** (all reversible via snapshot):
+### Hard profile sequence (all reversible via 0006)
 
-   | Step | Intent |
-   | --- | --- |
-   | A. Snapshot | Filters, routes, DNS, interface/Wi‑Fi/BT/cellular admin state as applicable |
-   | B. DNS policy | Override/block resolvers except what CP allowlist needs |
-   | C. Routes | Remove general egress; keep CP path if configured |
-   | D. Packet filter | Deny most traffic; allow CP endpoints only (when configured) |
-   | E. **Kill non-CP TCP** | Actively terminate established TCP sessions that are not on the CP allowlist |
-   | F. **Flush caches** | Clear DNS resolver caches and ARP/neighbor caches (and OS equivalents) so stale resolutions/L2 entries cannot bridge policy |
-   | G. Wi‑Fi | Disconnect / disable Wi‑Fi used for general connectivity |
-   | H. Other NICs | Disable interfaces not on the retained CP/uplink path |
-   | I. Bluetooth | **If feature flag enabled** (tenant default or install override): disable BT radios / PAN |
-   | J. Cellular / WWAN (“smart call”) | **If feature flag enabled**: disable cellular/WWAN interfaces |
-   | K. USB | **Do not disable** USB as part of isolation |
+Apply in an order that **cuts egress early**, then cleans residual state:
 
-2. **Feature flags** (tenant default, overridable per install): `disable_bluetooth`, `disable_cellular` (names indicative). Default for hostile templates: recommend `true` once backends are reliable; until then document cautiously.  
+| Step | Mutation | Why it’s here |
+| --- | --- | --- |
+| 0 | **Snapshot** (0006) | No mutate without restore plan |
+| 1 | DNS policy | Stop name-based bypass of allowlist |
+| 2 | Routes | Remove general egress; keep CP path if configured |
+| 3 | Packet filter | Deny-most; allow only CP endpoints when configured |
+| 4 | **Kill non-CP TCP** | Established RAT sessions must die, not linger |
+| 5 | **Flush DNS + ARP/neighbor caches** | Stale resolver/L2 entries must not bridge policy |
+| 6 | Wi‑Fi disconnect/disable | Kill common alternate uplink |
+| 7 | Disable non–CP-path NICs | Shrink lateral/physical paths |
+| 8 | Bluetooth *(flag)* | Optional PAN/radio cut |
+| 9 | Cellular/WWAN *(flag)* | Optional “smart call” cut |
+| — | **USB** | **Explicit non-goal:** do not disable |
 
-3. **CP exception:** minimal path for CP (HTTPS/mTLS — ADR-0004). No CP configured ⇒ no general remote path.  
+### Policy knobs
 
-4. **Orchestrator + platform backends** (`probe` / `snapshot` / `apply` / `restore` / `status`) on Windows → macOS → Linux.  
+- Flags `disable_bluetooth`, `disable_cellular`: **tenant default, install override** (stored per 0003).  
+- **CP exception:** if CP endpoints configured, retain minimal path for them (transport per 0004). If none → no intentional remote path.  
+- **Bypasses** (WSL, VPN, Hyper-V, IPv6, tether, …): inventory per OS; mitigate, document, or explicitly defer—never ignore.
 
-5. **Bypasses** inventoried (WSL, VPN, Hyper-V, IPv6, tether, etc.) — mitigate, document, or defer explicitly.  
+### Success metric
 
-6. **Success metric:** remote controller loses the channel (sockets die / unroutable), not merely “a rule exists.”
+Isolate **succeeds** when a pre-existing non-CP remote channel fails and new general egress fails—not when “rules exist.”
+
+### Architecture hook
+
+One orchestrator calls platform backends: `probe` / `snapshot` / `apply` / `restore` / `status` (0007 places backends).
 
 ## Consequences
 
-- Stronger C2 interruption; more complex restore (session state is not “restored,” only network posture is).  
-- Cache flush reduces stealthy reuse of poisoned DNS/ARP after policy apply.  
-- USB left up preserves local IR media / break-glass USB workflows.  
-- BT/cellular flags avoid surprising tenants that rely on those radios for out-of-band IR (they must opt policy consciously).
+- Restore complexity rises with surfaces touched (0006).  
+- USB stays up → local IR and offline sister media still work (0008).  
+- TCP kill is best-effort per OS API; document gaps, don’t pretend perfect.
 
-## Alternatives considered
+## Alternatives rejected
 
-| Alternative | Why not |
+| Alternative | Why rejected for izolater |
 | --- | --- |
-| Filter-only, leave TCP up | Owner rejected; RAT sessions can linger |
-| Disable USB | Owner rejected; breaks local IR/break-glass media |
-| Always kill BT/cellular with no flag | Too blunt; owner wants per-tenant/install control |
+| Filter-only, leave TCP up | Owner: RAT sessions linger |
+| Disable all NICs / pull cable | Breaks CP exception and local IR |
+| Always kill BT/cellular with no flag | Too blunt; tenant/install control required |
+| Disable USB | Owner: keep local IR / break-glass media |
 
-## Open questions
+## Open
 
-- Exact OS APIs for TCP kill and ARP/DNS flush per platform (spike).  
-- Whether UDP “sessions” / QUIC need explicit handling beyond filter+route.  
-- Default flag values for `disable_bluetooth` / `disable_cellular` in hostile template.
+- Per-OS APIs for TCP kill and cache flush (spike on Windows first).  
+- UDP/QUIC beyond filter+route—whether extra handling is required.  
+- Hostile-template defaults for BT/cellular flags once backends are reliable.
