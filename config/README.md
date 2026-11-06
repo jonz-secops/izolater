@@ -7,7 +7,7 @@
 | [tenants.example.toml](tenants.example.toml) | Fictitious `tenant_id` / `tenant_name` samples |
 | (future) `izolater.example.toml` | Full install config shape |
 
-Tenancy rules: [docs/tenancy.md](../tenancy.md). Install vs runtime: [ADR-0003](../docs/adr/0003-install-vs-runtime-config.md).
+Tenancy rules: [docs/tenancy.md](../docs/tenancy.md). Install vs runtime: [ADR-0003](../docs/adr/0003-install-vs-runtime-config.md).
 
 ```toml
 # izolater.example.toml (illustrative)
