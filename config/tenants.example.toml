@@ -1,0 +1,23 @@
+# Fictitious tenants for docs/tests only — not real customers.
+# Pattern: docs/tenancy.md
+
+[[tenants]]
+tenant_id = "a1b2c3d4-e5f6-4789-a012-3456789abcde"
+tenant_name = "northwind-security"
+enrollment = "tenant"
+# Options: "tenant" | "tenant_and_host"
+break_glass_scope = "tenant"
+notes = "Example enterprise tenant; per-tenant break-glass covers all hosts."
+
+[[tenants]]
+tenant_id = "f00dcafe-0001-4000-8000-00000000beef"
+tenant_name = "contoso-ir-lab"
+enrollment = "tenant"
+break_glass_scope = "tenant_and_host"
+notes = "Highest security example: proofs must match tenant_id + install_id."
+
+[[standalone_examples]]
+enrollment = "standalone"
+install_id = "11111111-2222-4333-8444-555555555555"
+break_glass_scope = "install"
+notes = "Non-tenant install: sister binary is per-install only."
